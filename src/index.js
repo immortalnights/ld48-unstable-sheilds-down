@@ -1,9 +1,10 @@
 import Phaser from 'phaser'
 import Asteroid from './asteroid'
-import { Container, Ship } from './ship'
+import Bullet from './bullet'
+import Enemy from './enemy'
+import { Ship, Container } from './ship'
 import { Station } from './station'
 import { findClosestTarget, findTargetsInRange, getOppositeDirection, getRandomDirection, toMMSS } from './utilities'
-
 
 const MIN_SHIELD_TIME =  5 // s
 const MAX_SHIELD_TIME =  8 // s
@@ -11,6 +12,8 @@ const VULNERABLE_TIME = 10 // s
 
 const INITIAL_ASTEROIDS = 4
 const MAXIMUM_ASTEROIDS = 12
+
+const MAXIMUM_ENEMIES = 12
 
 const ATTACH_RANGE = 25
 
@@ -38,9 +41,12 @@ class Unstable extends Phaser.Scene
     const { width, height } = this.sys.game.canvas
 
     this.player = this.physics.add.group()
+    this.playerBullets = this.physics.add.group()
     // container group does not need physics
     this.containers = this.add.group()
     this.asteroids = this.physics.add.group()
+    this.enemies = this.physics.add.group()
+    this.enemyBullets = this.physics.add.group()
 
     this.ship = new Ship(this, width / 2, height / 2 - 50)
     this.player.add(this.ship, true)
@@ -57,17 +63,27 @@ class Unstable extends Phaser.Scene
       xOffset += 20
     }
 
-    this.spawnAsteroids(INITIAL_ASTEROIDS)
-
     this.station = new Station(this, width / 2, height / 2)
     this.player.add(this.station, true)
+    this.station.body.setImmovable(true)
+
+    this.enemySpawnZone = [
+      new Phaser.Geom.Rectangle(width / 2, height / 2, width - 50, height - 50),
+      new Phaser.Geom.Rectangle(width / 2 + 1, height / 2 + 1, 150, 150)
+    ]
+
+    // const [ outer, inner ] = this.enemySpawnZone
+    // this.add.rectangle(outer.x, outer.y, outer.width, outer.height).setStrokeStyle(1, 0xFFFFFF)
+    // this.add.rectangle(inner.x, inner.y, inner.width, inner.height).setStrokeStyle(1, 0x00FFFF)
 
     this.beginInstability()
+    this.beginSpawnAsteroids()
+    this.beginSpawnEnemies()
 
     this.countdownInfoText = this.add.text(width / 2 - 34, 10, "Secure", {
       color: '#00DD00'
     })
-    this.countdownText = this.add.text(width / 2 - 34, 26, toMMSS(this.estimatedInstabilityTime), {
+    this.countdownText = this.add.text(width / 2 - 34, 26, toMMSS(0), {
       fontSize: 32,
     })
 
@@ -99,16 +115,35 @@ class Unstable extends Phaser.Scene
       }
     })
 
-    // Spawn some asteroids every few seconds
-    this.time.addEvent({
-      delay: 2000,
-      repeat: -1,
-      callback: () => {
-        const diff = Math.max(MAXIMUM_ASTEROIDS - (this.asteroids.getChildren().length), 0)
-        const spawnCount = Phaser.Math.RND.between(0, diff)
-        this.spawnAsteroids(spawnCount)
-      }
+    const moveTowards = (start, end, speed) => {
+      const rotation = Phaser.Math.Angle.BetweenPoints(start, end)
+      return this.physics.velocityFromRotation(rotation, speed)
+    }
+
+    this.events.on('enemy_fire', (enemy, projectileSpeed, projectileDamage) => {
+      const bullet = new Bullet(this, enemy.x, enemy.y, projectileDamage)
+      this.enemyBullets.add(bullet, true)
+
+      bullet.body.velocity = moveTowards(bullet, this.station, projectileSpeed)
     })
+    
+    this.physics.world.on('worldbounds', obj => {
+      // Only objects with both `body.setCollideWorldBounds(true)` and `body.onWorldBounds = true` will call this event
+      // assume it's a projectile
+      obj.gameObject.destroy()
+    })
+
+    this.physics.add.collider(
+      this.enemyBullets,
+      this.station,
+      (station, bullet) => {
+        station.takeDamage(bullet.data.get('damage'))
+        bullet.destroy()
+      },
+      (station, bullet) => {
+        return (station.active && bullet.active)
+      }
+    )
   }
 
   update(time, delta)
@@ -256,21 +291,10 @@ class Unstable extends Phaser.Scene
     return { x, y }
   }
 
-  spawnAsteroids(num)
+  getRandomSpawnPosition(direction)
   {
-    for (let index = 0; index < num; index ++)
-    {
-      const spawnDirection = getRandomDirection()
-      const position = this.getRandomOffscreenPosition(spawnDirection)
-      const targetPosition = this.getRandomOffscreenPosition(getOppositeDirection(spawnDirection))
-
-      const asteroid = new Asteroid(this, position.x, position.y, 20)
-      this.asteroids.add(asteroid, true)
-
-      const rotation = Phaser.Math.Angle.BetweenPoints(asteroid, targetPosition)
-      this.physics.velocityFromRotation(rotation, asteroid.getData('speed'), asteroid.body.velocity)
-    }
-    console.log(`Spawned ${num} asteroids (total=${this.asteroids.getChildren().length})`)
+    const [ outer, inner ] = this.enemySpawnZone
+    return Phaser.Geom.Rectangle.RandomOutside(outer, inner)
   }
 
   beginInstability()
@@ -306,6 +330,60 @@ class Unstable extends Phaser.Scene
         })
       }
     })
+  }
+
+  beginSpawnAsteroids()
+  {
+    this.time.addEvent({
+      delay: 2500,
+      repeat: -1,
+      callback: () => {
+        const diff = Math.max(MAXIMUM_ASTEROIDS - (this.asteroids.getChildren().length), 0)
+        const spawnCount = Phaser.Math.RND.between(0, diff)
+        this.spawnAsteroids(spawnCount)
+      }
+    })
+  }
+
+  spawnAsteroids(num)
+  {
+    for (let index = 0; index < num; index ++)
+    {
+      const spawnDirection = getRandomDirection()
+      const position = this.getRandomOffscreenPosition(spawnDirection)
+      const targetPosition = this.getRandomOffscreenPosition(getOppositeDirection(spawnDirection))
+
+      const asteroid = new Asteroid(this, position.x, position.y, 20)
+      this.asteroids.add(asteroid, true)
+
+      const rotation = Phaser.Math.Angle.BetweenPoints(asteroid, targetPosition)
+      this.physics.velocityFromRotation(rotation, asteroid.getData('speed'), asteroid.body.velocity)
+    }
+    console.log(`Spawned ${num} asteroids (total=${this.asteroids.getChildren().length})`)
+  }
+
+  beginSpawnEnemies()
+  {
+    this.time.addEvent({
+      delay: 1000,
+      repeat: -1,
+      callback: () => {
+        const diff = Math.max(MAXIMUM_ENEMIES - (this.enemies.getChildren().length), 0)
+        const spawnCount = Phaser.Math.RND.between(0, diff)
+        this.spawnEnemy(spawnCount)
+      }
+    })
+  }
+
+  spawnEnemy(num)
+  {
+    for (let index = 0; index < num; index ++)
+    {
+      const position = this.getRandomSpawnPosition()
+      const enemy = new Enemy(this, position.x, position.y)
+      this.enemies.add(enemy, true)
+    }
+    console.log(`Spawned ${num} enemies (total=${this.enemies.getChildren().length})`)
   }
 }
 

@@ -27,7 +27,9 @@ export default class Asteroid extends Phaser.GameObjects.Polygon
   {
     super(scene, x, y, createPolygonPoints(0, 0, r))
     this.setFillStyle(0x111111, 1)
-    
+
+    this.setDepth(-1)
+
     const resourceType = Phaser.Math.RND.pick(Object.keys(Resources))
     const resource = Resources[resourceType]
     this.setData({
