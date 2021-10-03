@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { Resources } from './defines'
 
 export class Station extends Phaser.GameObjects.Container
 {
@@ -9,8 +10,16 @@ export class Station extends Phaser.GameObjects.Container
         this.data = new Phaser.Data.DataManager(this)
         this.data.set({
             rebooting: false,
-            integrity: 100
+            integrity: 100,
+            transferRange: 30,
+            transferRate: 80,
         })
+
+        this.resources = new Phaser.Data.DataManager(this)
+        Object.keys(Resources).forEach(item => {
+            this.resources.set(item, 0)
+        })
+
         this.rebooting = false
 
         this.hull = this.scene.add.arc(0, 0, radius, 0, 360, false, 0x000000, 1)

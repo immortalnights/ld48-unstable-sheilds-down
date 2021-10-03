@@ -1,4 +1,12 @@
 import Phaser from 'phaser'
+import { Resources } from './defines'
+
+
+const BASE_MAX_SPEED = 150
+const BASE_MAX_WEIGHT = 3000
+const BASE_MINING_RATE = 40
+const BASE_MINING_RANGE = 30
+
 
 export class Ship extends Phaser.GameObjects.Container
 {
@@ -11,9 +19,11 @@ export class Ship extends Phaser.GameObjects.Container
         this.data = new Phaser.Data.DataManager(this)
         this.data.set({
             integrity: 100,
-            maxSpeed: 150,
-            maxWeight: 3000,
+            maxSpeed: BASE_MAX_SPEED,
+            maxWeight: BASE_MAX_WEIGHT,
             rotationSpeed: 200,
+            miningRange: BASE_MINING_RANGE,
+            miningRate: BASE_MINING_RATE,
         })
 
         this.nextRotation = this.rotation
@@ -40,6 +50,20 @@ export class Ship extends Phaser.GameObjects.Container
     get rotationSpeed()
     {
         return this.data.get('rotationSpeed')
+    }
+
+    preUpdate()
+    {
+        this.positionHistory.push({
+            x: this.x,
+            y: this.y,
+            r: this.rotation
+        })
+
+        if (this.positionHistory.length > 100)
+        {
+            this.positionHistory.shift()
+        }
     }
 
     isAlive()
@@ -93,18 +117,44 @@ export class Ship extends Phaser.GameObjects.Container
         return position
     }
 
-    preUpdate()
+    hasCapacity(type)
     {
-        this.positionHistory.push({
-            x: this.x,
-            y: this.y,
-            r: this.rotation
+        return this.availableCapacity(type) > 0
+    }
+
+    availableCapacity(type)
+    {
+        const containers = this.containers.filter(container => {
+            const [ cargoType, cargo, capacity ] = container.getData([ 'cargoType', 'cargo', 'capacity' ])
+            return cargoType == null || type == null || (cargoType === type && cargo < capacity)
         })
 
-        if (this.positionHistory.length > 100)
-        {
-            this.positionHistory.shift()
-        }
+        const available = containers.reduce((val, item, index, items) => {
+            const [ cargo, capacity ] = item.getData([ 'cargo', 'capacity' ])
+            return val + (capacity - cargo)
+        }, 0)
+
+        // console.log(`Ship has ${available} available space for ${type || 'any'}`)
+        return available
+    }
+
+    useCapacity(type, amount)
+    {
+        // Find all containers that have space for the resource
+        const containers = this.containers.filter(container => {
+            const [ cargoType, cargo, capacity ] = container.getData([ 'cargoType', 'cargo', 'capacity' ])
+            return cargoType == null || (cargoType === type && cargo < capacity)
+        })
+
+        containers.forEach(container => {
+            const [ cargo, capacity ] = container.getData([ 'cargo', 'capacity' ])
+            const transfer = Math.min(capacity - cargo, amount)
+            container.setData('cargoType', type)
+            container.incData('cargo', amount)
+            amount -= transfer
+        })
+
+        console.assert(amount === 0, "Failed to transfer all resources to containers")
     }
 }
 
@@ -122,7 +172,7 @@ export class Container extends Phaser.GameObjects.Container
             weight: 80,
             capacity: 1000,
             cargo: 0,
-            cargoType: '',
+            cargoType: undefined,
         })
         this.attachedTo = null
 
@@ -135,18 +185,42 @@ export class Container extends Phaser.GameObjects.Container
         this.add(this.cargo)
 
         const redrawCargo = () => {
-            const [ capacity, cargo ] = this.data.get([ 'capacity', 'cargo' ])
+            const [ capacity, cargo, cargoType ] = this.data.get([ 'capacity', 'cargo', 'cargoType' ])
+
+            const color = Resources[cargoType]?.color || 0xFFFFFF
+            this.cargo.setFillStyle(color, 1)
+
             this.cargo.setScale(cargo / capacity, 1)
         }
 
         this.on('changedata-capacity', () => {
             redrawCargo()
         })
-        this.on('changedata-cargo', () => {
+        this.on('changedata-cargo', (obj, val, prev) => {
+            if (val === 0)
+            {
+                this.setData('cargoType', undefined)
+            }
+
             redrawCargo()
         })
 
         this.setSize(10, 10)
+    }
+
+    preUpdate()
+    {
+        if (this.attachedTo)
+        {
+            const position = this.attachedTo.getAttachedPosition(this.positionLag)
+
+            // if (Phaser.Math.Distance.BetweenPoints(this, position) > 4)
+            {
+                this.x = position.x
+                this.y = position.y
+                this.rotation = position.r
+            }
+        }
     }
 
     isAlive()
@@ -169,20 +243,5 @@ export class Container extends Phaser.GameObjects.Container
     {
         this.attachedTo = undefined
         this.positionLag = undefined
-    }
-
-    preUpdate()
-    {
-        if (this.attachedTo)
-        {
-            const position = this.attachedTo.getAttachedPosition(this.positionLag)
-
-            // if (Phaser.Math.Distance.BetweenPoints(this, position) > 4)
-            {
-                this.x = position.x
-                this.y = position.y
-                this.rotation = position.r
-            }
-        }
     }
 }

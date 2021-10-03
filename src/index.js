@@ -2,7 +2,7 @@ import Phaser from 'phaser'
 import Asteroid from './asteroid'
 import { Container, Ship } from './ship'
 import { Station } from './station'
-import { findClosestTarget, getOppositeDirection, getRandomDirection, toMMSS } from './utilities'
+import { findClosestTarget, findTargetsInRange, getOppositeDirection, getRandomDirection, toMMSS } from './utilities'
 
 
 const MIN_SHIELD_TIME =  5 // s
@@ -150,6 +150,49 @@ class Unstable extends Phaser.Scene
     }
 
     // Check for asteroid mining
+    const [ miningRange, miningRate ] = this.ship.data.get([ 'miningRange', 'miningRate' ])
+    if (this.ship.hasCapacity())
+    {
+      const closest = findClosestTarget(this.ship, this.asteroids, miningRange)
+      if (closest)
+      {
+        const asteroid = closest.obj
+        const [ type, quantity, density ] = asteroid.getData([ 'type', 'quantity', 'density' ])
+
+        const availableCapacity = this.ship.availableCapacity(type)
+        const mined = Math.min((miningRate * density) * (delta / 1000), availableCapacity, quantity)
+        this.ship.useCapacity(type, mined)
+
+        if (quantity - mined <= 0)
+        {
+          console.log(`Asteroid depleted`)
+          asteroid.destroy()
+        }
+        else
+        {
+          console.log(`Mined ${mined} ${type} from asteroid (${quantity - mined} remaining)`)
+          asteroid.incData('quantity', -mined)
+        }
+      }
+    }
+
+    // Check for unloading containers
+    let transferCapacity = this.station.data.get('transferRate') * (delta / 1000)
+    const targets = findTargetsInRange(this.station, this.containers, this.station.data.get('transferRange'))
+    targets.forEach(target => {
+      const container = target.obj
+      const [ cargoType, availableCargo ] = container.data.get([ 'cargoType', 'cargo' ])
+      if (cargoType && availableCargo > 0)
+      {
+        const transferred = Math.min(transferCapacity, availableCargo)
+  
+        container.data.inc('cargo', -transferred)
+        this.station.resources.inc(cargoType, transferred)
+        transferCapacity -= transferred
+
+        console.log(`Transferred ${cargoType} ${transferred} from container (${availableCargo - transferred} remaining)`)
+      }
+    })
   }
 
   isObjOffscreen(obj)

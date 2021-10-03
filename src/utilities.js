@@ -75,7 +75,7 @@ export const findTargetsInRange = (origin, others, range) => {
         if (obj.isAlive())
         {
             const distance = Phaser.Math.Distance.BetweenPoints(origin, obj)
-            console.log("item at", distance)
+            // console.log(`Other is ${distance} from origin`)
             if (range == null || distance <= range)
             {
                 inRange.push({
