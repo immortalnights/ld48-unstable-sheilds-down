@@ -6,6 +6,13 @@ export class Station extends Phaser.GameObjects.Container
     {
         super(scene, x, y)
 
+        this.data = new Phaser.Data.DataManager(this)
+        this.data.set({
+            rebooting: false,
+            integrity: 100
+        })
+        this.rebooting = false
+
         this.hull = this.scene.add.arc(0, 0, radius, 0, 360, false, 0x000000, 1)
         this.hull.setStrokeStyle(1, 0xBBBBBB, 1)
         this.add(this.hull)
@@ -15,14 +22,25 @@ export class Station extends Phaser.GameObjects.Container
         this.add(this.shield)
 
         this.setSize(20, 20)
+
+        this.on('changedata-rebooting', (obj, val, prev) => {
+            this.scene.tweens.add({
+                targets: this.shield,
+                alpha: Number(!val),
+                ease: 'Power4'
+            })
+        })
     }
 
-    toggleShield(active)
+    takeDamage(amount)
     {
-        this.scene.tweens.add({
-            targets: this.shield,
-            alpha: active,
-            ease: 'Power4'
-        })
+        if (this.data.get('rebooting') === true)
+        {
+            this.data.add('integrity', -amount)
+        }
+        else
+        {
+            // No damage due to shield
+        }
     }
 }
