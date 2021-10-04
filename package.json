@@ -1,5 +1,5 @@
 {
-  "name": "ld49_unstable",
+  "name": "ld49_shields_down",
   "version": "0.0.1",
   "description": "",
   "main": "src/index.js",
@@ -9,13 +9,13 @@
   },
   "repository": {
     "type": "git",
-    "url": ""
+    "url": "https://github.com/immortalnights/ld48-unstable-sheilds-down"
   },
   "author": "Andrew Cockayne",
   "license": "MIT",
   "licenseUrl": "http://www.opensource.org/licenses/mit-license.php",
   "bugs": {
-    "url": ""
+    "url": "https://github.com/immortalnights/ld48-unstable-sheilds-down/issues"
   },
   "homepage": "",
   "devDependencies": {

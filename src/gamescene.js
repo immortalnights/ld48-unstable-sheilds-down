@@ -14,9 +14,32 @@ const VULNERABLE_TIME = 10 // s
 const INITIAL_ASTEROIDS = 4
 const MAXIMUM_ASTEROIDS = 12
 
-const MAXIMUM_ENEMIES = 6
+const INITIAL_ENEMIES = 6
 
 const ATTACH_RANGE = 25
+
+const INITIAL_CREDITS = 2000
+
+class StarBackground extends Phaser.GameObjects.Graphics
+{
+    constructor(scene, options)
+    {
+        super(scene, { x: 0, y: 0 })
+
+        for (let index = 0; index < 300; index++)
+        {
+            const size = Phaser.Math.RND.between(1, 2)
+            const alpha = Phaser.Math.RND.realInRange(0.1, 1)
+            const x = Phaser.Math.RND.between(0, options.width)
+            const y = Phaser.Math.RND.between(0, options.height)
+            const color = Phaser.Math.RND.pick([ 0xffffff, 0x800080, 0x222299 ])
+
+            this.fillStyle(color, alpha)
+            this.fillRect(x, y, size, size)
+        }
+
+    }
+}
 
 
 export default class Unstable extends Phaser.Scene
@@ -52,12 +75,17 @@ export default class Unstable extends Phaser.Scene
         console.log("Game.create")
         const [ width, height ] = this.getSceneBounds()
 
+        this.add.existing(new StarBackground(this, {
+            width,
+            height
+        }))
+
         this.registry.set({
             startTime: Date.now(),
             gameover: false,
             timer: 0,
             vulnerable: false,
-            credits: 25000,
+            credits: INITIAL_CREDITS,
         })
         this.scene.launch('ui')
 
@@ -109,16 +137,66 @@ export default class Unstable extends Phaser.Scene
             break: 'DOWN',
             left: 'LEFT',
             right: 'RIGHT',
+            accel2: 'W',
+            break2: 'S',
+            left2: 'A',
+            right2: 'D',
             coupler: 'SPACE',
         })
 
         this.bindings.coupler.on('down', () => {
-            const target = findClosestTarget(this.ship, this.containers, ATTACH_RANGE)
+            const connectedContainers = this.ship.containers
+            const distanceToStation = Phaser.Math.Distance.BetweenPoints(this.ship, this.station)
 
-            if (target)
+            // find the fullest container
+            const findFullestContainer = () => {
+                let fullestContainer
+                connectedContainers.forEach(container => {
+                    if (container.data.get('cargo') > 0 && (!fullestContainer || container.data.get('cargo') > fullestContainer.data.get('cargo')))
+                    {
+                        fullestContainer = container
+                    }
+                })
+                return fullestContainer
+            }
+
+            const attachClosestContainer = () => {
+                const target = findClosestTarget(this.ship, this.containers, ATTACH_RANGE)
+                if (target)
+                {
+                    this.ship.attach(target.obj)
+                    this.containers.remove(target.obj)
+                }
+                return !!target
+            }
+
+            // If the player is close to the station, try and drop the fullest container
+            if (distanceToStation <= 30)
             {
-                this.ship.attach(target.obj)
-                this.containers.remove(target.obj)
+                const container = findFullestContainer()
+                if (container)
+                {
+                    this.ship.detach(container)
+                    this.containers.add(container)
+                }
+                else if (attachClosestContainer())
+                {
+                    // Attached closest
+                }
+                else
+                {
+                    // Detach container
+                    const container = this.ship.detach()
+    
+                    if (container)
+                    {
+                        this.containers.add(container)
+                    }
+                }
+            }
+            else if (attachClosestContainer())
+            {
+                
             }
             else
             {
@@ -190,7 +268,7 @@ export default class Unstable extends Phaser.Scene
 
         this.ship.nextRotation = Phaser.Math.Angle.RotateTo(this.ship.nextRotation, this.ship.rotation, 0.025)
 
-        if (this.bindings.accel.isDown)
+        if (this.bindings.accel.isDown || this.bindings.accel2.isDown)
         {
             // this.playerEngine()
             const targetVelocity = this.physics.velocityFromRotation(this.ship.nextRotation, this.ship.speed)
@@ -198,7 +276,7 @@ export default class Unstable extends Phaser.Scene
         }
         else
         {
-            if (this.bindings.break.isDown)
+            if (this.bindings.break.isDown || this.bindings.break2.isDown)
             {
                 this.ship.body.velocity.divide({ x: 1.01, y: 1.01 })
                 const stopSpeed = 8
@@ -210,17 +288,35 @@ export default class Unstable extends Phaser.Scene
             }
         }
 
-        if (this.bindings.left.isDown)
+        if (this.bindings.left.isDown || this.bindings.left2.isDown)
         {
             this.ship.body.angularVelocity = -this.ship.rotationSpeed
         }
-        else if (this.bindings.right.isDown)
+        else if (this.bindings.right.isDown || this.bindings.right2.isDown)
         {
             this.ship.body.angularVelocity = this.ship.rotationSpeed
         }
         else
         {
             this.ship.body.angularVelocity = 0
+        }
+
+        const [ width, height ] = this.getSceneBounds()
+        if (this.ship.x < -20)
+        {
+            this.ship.x = width + 10
+        }
+        else if (this.ship.x > width + 20)
+        {
+            this.ship.x = -10
+        }
+        if (this.ship.y < -20)
+        {
+            this.ship.y = height + 10
+        }
+        else if (this.ship.y > height + 20)
+        {
+            this.ship.y = -10
         }
 
         // Check for asteroid mining
@@ -412,18 +508,20 @@ export default class Unstable extends Phaser.Scene
 
     beginSpawnEnemies()
     {
+        // Spawn two more enemies every two seconds
         this.time.addEvent({
-            delay: 1000,
+            delay: 5000,
             repeat: -1,
             callback: () => {
-                const diff = Math.max(MAXIMUM_ENEMIES - (this.enemies.getChildren().length), 0)
-                const spawnCount = Phaser.Math.RND.between(0, diff)
-                this.spawnEnemy(spawnCount)
+                const spawnCount = Phaser.Math.RND.between(2, 4)
+                this.spawnEnemies(spawnCount)
             }
         })
+
+        this.spawnEnemies(INITIAL_ENEMIES)
     }
 
-    spawnEnemy(num)
+    spawnEnemies(num)
     {
         for (let index = 0; index < num; index ++)
         {

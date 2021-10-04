@@ -5,7 +5,7 @@ import { Resources } from './defines'
 const BASE_MAX_SPEED = 150
 const BASE_MAX_WEIGHT = 3000
 const BASE_MINING_RATE = 40
-const BASE_MINING_RANGE = 30
+const BASE_MINING_RANGE = 180
 
 
 export class Ship extends Phaser.GameObjects.Container
@@ -71,6 +71,24 @@ export class Ship extends Phaser.GameObjects.Container
         return this.active
     }
 
+    getCapacityTakenPercent()
+    {
+        let val = null
+        if (this.containers.length > 0)
+        {
+            let maxCargo = 0
+            let totalCargo = 0
+            this.containers.forEach(container => {
+                maxCargo += container.data.get('capacity')
+                totalCargo += container.data.get('cargo')
+            })
+
+            val = (totalCargo / maxCargo) * 100
+        }
+
+        return val
+    }
+
     getCargoWeight()
     {
         return this.containers.reduce((val, cur, index, items) => {
@@ -80,17 +98,29 @@ export class Ship extends Phaser.GameObjects.Container
 
     attach(container)
     {
-        const lag = 20 + (20 * this.containers.length)
+        const offset = 20 + (20 * this.containers.length)
         this.containers.push(container)
-        container.attachTo(this, lag)
+        container.attachTo(this, offset)
     }
 
-    detach()
+    detach(container)
     {
-        let container
-        if (this.containers.length > 0)
+        if (container == undefined)
         {
-            container = this.containers.pop()
+            // Just drop the last container
+            if (this.containers.length > 0)
+            {
+                container = this.containers.pop()
+            }
+        }
+        else
+        {
+            const index = this.containers.indexOf(container)
+            this.containers.splice(index, 1)
+        }
+
+        if (container)
+        {
             container.detachFrom(this)
         }
 
@@ -212,14 +242,48 @@ export class Container extends Phaser.GameObjects.Container
     {
         if (this.attachedTo)
         {
-            const position = this.attachedTo.getAttachedPosition(this.positionLag)
+            // Rotate to the attached item
+            const rotation = Phaser.Math.Angle.BetweenPoints(this, this.attachedTo)
+            // this.physics.velocityFromRotation(rotation, this.attachTo.speed)
+            this.rotation = Phaser.Math.Angle.RotateTo(this.rotation, rotation, 0.025)
 
-            // if (Phaser.Math.Distance.BetweenPoints(this, position) > 4)
-            {
-                this.x = position.x
-                this.y = position.y
-                this.rotation = position.r
-            }
+            // const { x, y } = this.attachedTo
+            // // this.x = x + 50 * Math.cos(this.rotation)
+            // // this.y = y + 50 * Math.sin(this.rotation)
+
+            // const length = 50 // Math.pow(x, 2) + Math.pow(y, 2)
+            // const pos = new Phaser.Math.Vector2(x, y)
+            // pos.rotate(this.angle)
+            // // pos.setLength(length)
+            // this.x = x + pos.x
+            // this.y = y + pos.y
+
+            // move towards the player if not too close
+            // const distance = Phaser.Math.Distance.BetweenPoints(this, this.attachedTo)
+            // console.log(distance)
+            // if (distance > 14)
+            // {
+            //     this.scene.physics.velocityFromRotation(this.rotation, this.attachedTo.data.get('speed'), this.body.velocity)
+            // }
+            // else
+            // {
+            //     this.body.velocity.x = 0
+            //     this.body.velocity.y = 0
+            // }
+
+            const point = new Phaser.Math.Vector2(this.attachedTo)
+            Phaser.Math.RotateAroundDistance(point, point.x, point.y, (this.attachedTo.rotation), this.attachOffset);
+            this.setPosition(point.x, point.y)
+
+
+            // const position = this.attachedTo.getAttachedPosition(this.positionLag)
+
+            // // if (Phaser.Math.Distance.BetweenPoints(this, position) > 4)
+            // {
+            //     this.x = position.x
+            //     this.y = position.y
+            //     this.rotation = position.r
+            // }
         }
     }
 
@@ -228,20 +292,21 @@ export class Container extends Phaser.GameObjects.Container
         return this.active
     }
 
-    attachTo(other, lag)
+    attachTo(other, offset)
     {
         this.attachedTo = other
-        this.positionLag = lag
+        this.attachOffset = -offset
 
-        const position = this.attachedTo.getAttachedPosition(this.positionLag)
-        this.x = position.x
-        this.y = position.y
-        this.rotation = position.r
+        // const position = this.attachedTo.getAttachedPosition(this.positionLag)
+        // this.x = position.x
+        // this.y = position.y
+        // this.rotation = position.r
     }
 
     detachFrom(other)
     {
+        this.setPosition(this.attachedTo.x, this.attachedTo.y)
         this.attachedTo = undefined
-        this.positionLag = undefined
+        this.attachOffset = undefined
     }
 }

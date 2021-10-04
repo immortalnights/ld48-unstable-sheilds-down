@@ -56,7 +56,7 @@ export const Upgrades = [
         name: "Ship Mining Rate",
         valueLabel: "Rate",
         category: 'ship',
-        cost: 100,
+        cost: 1500,
         costMultiplier: 1.15,
         type: 'shipMiningRateModifier',
         value: 1.05,

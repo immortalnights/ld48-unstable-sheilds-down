@@ -12,8 +12,12 @@ export default class IntroductionScene extends Phaser.Scene
     {
         const { width, height } = this.sys.game.canvas
 
-        this.add.text(width / 6, 30, "Unstable", {
+        this.add.text(width / 6, 48, "Shields Down", {
             fontSize: 42
+        })
+
+        this.add.text(width / 6, 30, "Ludum Dare 49", {
+            fontSize: 22
         })
 
         this.add.text(60, 120, `

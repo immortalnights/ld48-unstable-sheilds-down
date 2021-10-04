@@ -186,16 +186,26 @@ export default class UI extends Phaser.Scene
             fontSize: 32,
         })
 
-        const setCreditsText = val => {
+        this.setCreditsText = val => {
             if (val > 9999999)
             {
                 val = 9999999
             }
 
-            creditsText.setText(val.toFixed(0).padStart(7, '0'))
+            if (creditsText.active)
+            {
+                creditsText.setText(val.toFixed(0).padStart(7, '0'))
+            }
         }
 
-        setCreditsText(this.registry.get('credits'))
+        this.setCreditsText(this.registry.get('credits'))
+
+        const capacityTextLabel = this.add.text(170, 10, "Capacity", {
+            color: '#aaaaaa'
+        })
+        this.capacityFreeText = this.add.text(170, 26, "000%", {
+            fontSize: 32,
+        })
 
         const countdownTextLabel = this.add.text(width / 2 - 34, 10, "Secure", {
             color: '#00DD00'
@@ -233,24 +243,31 @@ export default class UI extends Phaser.Scene
         this.add.existing(upgradesButton)
         // showUpgradeDialog()
 
-        const audioToggle = this.add.image(width - 30, height - 30, 'audio_on')
-        audioToggle.setInteractive()
-        audioToggle.on(Phaser.Input.Events.POINTER_DOWN, () => {
+        const audioToggleButton = this.add.image(width - 30, height - 30, 'audio_on')
+        const setAudioButtonTexture = () => {
+            audioToggleButton.setTexture(this.game.sound.mute ? 'audio_on' : 'audio_off')
+        }
+        setAudioButtonTexture()
+
+        audioToggleButton.setInteractive()
+        audioToggleButton.on(Phaser.Input.Events.POINTER_DOWN, () => {
             this.game.sound.mute = !this.game.sound.mute
-
-            audioToggle.setTexture(this.game.sound.mute ? 'audio_on' : 'audio_off')
+            setAudioButtonTexture()
         })
 
+        // this.game.events.on('changedata-credits', (obj, val, prev) => {
+        //     setCreditsText(val)
+        // })
 
-        this.game.events.on('changedata-credits', (obj, val, prev) => {
-            setCreditsText(val)
-        })
-
-        this.game.events.on('changedata-timer', (obj, val, prev) => {
+        this.setCountdownText = val => {
             countdownText.setText(toMMSS(val))
-        })
-        this.game.events.on('changedata-vulnerable', (obj, val, prev) => {
-            if (val)
+        }
+
+        // this.game.events.on('changedata-timer', (obj, val, prev) => {
+        //     countdownText.setText(toMMSS(val))
+        // })
+        this.toggleVulnerableState = vulnerable => {
+            if (vulnerable)
             {
                 countdownTextLabel.setText("Vulnerable")
                 countdownTextLabel.setColor('#DD0000')
@@ -260,14 +277,27 @@ export default class UI extends Phaser.Scene
                 countdownTextLabel.setText("Secure")
                 countdownTextLabel.setColor('#00DD00')
             }
-        })
+        }
+
+        // this.game.events.on('changedata-vulnerable', (obj, val, prev) => {
+        //     if (val)
+        //     {
+        //         countdownTextLabel.setText("Vulnerable")
+        //         countdownTextLabel.setColor('#DD0000')
+        //     }
+        //     else
+        //     {
+        //         countdownTextLabel.setText("Secure")
+        //         countdownTextLabel.setColor('#00DD00')
+        //     }
+        // })
 
         this.cameras.main.on('camerafadeoutcomplete', () => {
             this.scene.get('game').scene.restart()
             this.scene.restart();
         });
 
-        this.game.events.on('changedata-gameover', () => {
+        this.game.events.once('changedata-gameover', () => {
             this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.75)
             this.add.text(width / 2, height / 2, "Game Over", {
                 fontSize: 48,
@@ -289,5 +319,19 @@ export default class UI extends Phaser.Scene
         const gameScene = this.scene.get('game')
         const [ maxIntegrity, integrity ] = gameScene.station.data.get([ 'maxIntegrity', 'integrity' ])
         this.stationIntegrityText.setText(formatPercent((integrity / maxIntegrity) * 100, 3))
+
+        this.setCreditsText(this.registry.get('credits'))
+        this.setCountdownText(this.registry.get('timer'))
+        this.toggleVulnerableState(this.registry.get('vulnerable'))
+
+        const capacityTakenPercent = gameScene.ship.getCapacityTakenPercent()
+        if (capacityTakenPercent === null)
+        {
+            this.capacityFreeText.setText("-")
+        }
+        else
+        {
+            this.capacityFreeText.setText(capacityTakenPercent.toFixed(0) + "%")
+        }
     }
 }
