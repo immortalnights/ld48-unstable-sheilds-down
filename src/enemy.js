@@ -9,7 +9,7 @@ export default class Enemy extends Phaser.GameObjects.Container
         this.data = new Phaser.Data.DataManager(this)
         this.data.set({
             speed: Phaser.Math.RND.between(120, 160),
-            turnSpeed: Phaser.Math.RND.between(0, 1) === 0 ? 0.02 : -0.02,
+            turnSpeed: 0.02,
             weaponRange: 40,
             weaponDamage: 2
         })
