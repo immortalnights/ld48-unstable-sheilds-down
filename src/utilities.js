@@ -23,6 +23,26 @@ export const toMMSS = ms => {
 }
 
 
+export const soundLimiter = function(sound, volume=1, delay=100) {
+    let skip = false
+    return function(config) {
+        // volume = config?.volume || 1
+        // delay = config?.delay || 100
+
+        if (skip === false)
+        {
+            sound.play({
+                volume
+            })
+            skip = true
+            setTimeout(() => {
+                skip = false
+            }, delay)
+        }
+    }
+}
+
+
 export const getRandomDirection = () => {
     return Phaser.Math.RND.pick([ 'top', 'right', 'bottom', 'left' ])
 }

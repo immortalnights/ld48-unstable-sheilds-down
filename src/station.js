@@ -23,8 +23,6 @@ export class Station extends Phaser.GameObjects.Container
             processRate: Math.floor(BASE_TRANSFER_RATE  * 0.6)
         })
 
-        console.log(Resources)
-
         this.resources = new Phaser.Data.DataManager(this)
         Object.keys(Resources).forEach(item => {
             this.resources.set(item, 0)
@@ -69,6 +67,11 @@ export class Station extends Phaser.GameObjects.Container
                 console.log(`Processed ${processed} ${key} for ${credits} (remaining=${amount})`)
             }
         })
+    }
+
+    isVulnerable()
+    {
+        return this.data.get('rebooting') === true
     }
 
     takeDamage(amount)

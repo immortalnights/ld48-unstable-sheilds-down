@@ -1,7 +1,7 @@
 import Phaser from 'phaser'
 import Button from './button'
 import { Upgrades } from './defines'
-import { toMMSS } from './utilities'
+import { soundLimiter, toMMSS } from './utilities'
 
 
 const formatPercent = (val, padding = 0) => {
@@ -42,6 +42,8 @@ class UpgradeItem extends Phaser.GameObjects.Container
             let credits = scene.registry.get('credits')
             if (credits >= details.cost)
             {
+                this.scene.selectSound()
+
                 // shouldn't be changing the game state in the UI!
                 credits -= Math.max(details.cost, 0)
                 scene.registry.set('credits', credits)
@@ -159,11 +161,20 @@ export default class UI extends Phaser.Scene
       })
     }
 
+    preload()
+    {
+        this.load.audio('ui_select', 'assets/select_008.ogg')
+        this.load.image('audio_on', 'assets/audioOn.png')
+        this.load.image('audio_off', 'assets/audioOff.png')
+    }
+
     create()
     {
         const { width, height } = this.sys.game.canvas
 
         this.upgrades = [ ...Upgrades ]
+
+        this.selectSound = soundLimiter(this.sound.add('ui_select'))
 
         const background = this.add.rectangle(width / 2, 28, width + 4, 64, 0x000000, 0.75)
         background.setStrokeStyle(1, 0x222222, 1)
@@ -204,12 +215,14 @@ export default class UI extends Phaser.Scene
         const showUpgradeDialog = () => {
             if (upgradeDialog)
             {
+                this.selectSound()
                 upgradeDialog.destroy()
                 upgradeDialog = null
                 this.scene.resume('game')
             }
             else
             {
+                this.selectSound()
                 upgradeDialog = new UpgradeComponent(this, width / 2, height / 2)
                 this.add.existing(upgradeDialog)
                 this.scene.pause('game')
@@ -219,6 +232,15 @@ export default class UI extends Phaser.Scene
         const upgradesButton = new Button(this, 64, height - 26, 100, 28, "Upgrades", showUpgradeDialog)
         this.add.existing(upgradesButton)
         // showUpgradeDialog()
+
+        const audioToggle = this.add.image(width - 30, height - 30, 'audio_on')
+        audioToggle.setInteractive()
+        audioToggle.on(Phaser.Input.Events.POINTER_DOWN, () => {
+            this.game.sound.mute = !this.game.sound.mute
+
+            audioToggle.setTexture(this.game.sound.mute ? 'audio_on' : 'audio_off')
+        })
+
 
         this.game.events.on('changedata-credits', (obj, val, prev) => {
             setCreditsText(val)

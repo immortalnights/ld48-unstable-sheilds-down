@@ -42,12 +42,15 @@ export default class Enemy extends Phaser.GameObjects.Container
 
         if (this.weaponCooldown < 0)
         {
-            const distance = Phaser.Math.Distance.BetweenPoints(this, station)
-            if (distance < weaponRange)
+            if (station.isVulnerable())
             {
-                // FIRE
-                this.weaponCooldown = 200
-                this.scene.events.emit('enemy_fire', this, 200, weaponDamage)
+                const distance = Phaser.Math.Distance.BetweenPoints(this, station)
+                if (distance < weaponRange)
+                {
+                    // FIRE
+                    this.weaponCooldown = 200
+                    this.scene.events.emit('enemy_fire', this, 200, weaponDamage)
+                }
             }
         }
         else

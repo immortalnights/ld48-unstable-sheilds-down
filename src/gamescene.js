@@ -4,7 +4,7 @@ import Bullet from './bullet'
 import Enemy from './enemy'
 import { Ship, Container } from './ship'
 import { Station } from './station'
-import { findClosestTarget, findTargetsInRange, getOppositeDirection, getRandomDirection, toMMSS } from './utilities'
+import { findClosestTarget, findTargetsInRange, getOppositeDirection, getRandomDirection, soundLimiter, toMMSS } from './utilities'
 
 
 const MIN_SHIELD_TIME =  5 // s
@@ -42,6 +42,9 @@ export default class Unstable extends Phaser.Scene
     preload()
     {
         console.log("Game.preload")
+        this.load.audio('station_hit', 'assets/impactMetal_003.ogg')
+        this.load.audio('shield_down', 'assets/forceField_000.ogg')
+        this.load.audio('enemy_fire', 'assets/laserSmall_004.ogg')
     }
 
     create()
@@ -135,9 +138,11 @@ export default class Unstable extends Phaser.Scene
 
         this.events.on('upgrade', this.onUpgradePurchased, this)
 
+        const enemyFireSound = soundLimiter(this.sound.add('enemy_fire'), 0.25)
         this.events.on('enemy_fire', (enemy, projectileSpeed, projectileDamage) => {
             const bullet = new Bullet(this, enemy.x, enemy.y, projectileDamage)
             this.enemyBullets.add(bullet, true)
+            enemyFireSound()
 
             bullet.body.velocity = moveTowards(bullet, this.station, projectileSpeed)
         })
@@ -148,17 +153,24 @@ export default class Unstable extends Phaser.Scene
             obj.gameObject.destroy()
         })
 
+        const stationDamagedSound = soundLimiter(this.sound.add('station_hit'), 0.3)
         this.physics.add.collider(
             this.enemyBullets,
             this.station,
             (station, bullet) => {
-                station.takeDamage(bullet.data.get('damage'))
+                if (station.isVulnerable())
+                {
+                    stationDamagedSound()
+                    station.takeDamage(bullet.data.get('damage'))
+                }
                 bullet.destroy()
             },
             (station, bullet) => {
                 return (station.active && bullet.active)
             }
         )
+
+        // this.playerEngine = soundLimiter(this.sound.add('player_engine'), 0.5, 1000)
     }
 
     getSceneBounds()
@@ -180,17 +192,21 @@ export default class Unstable extends Phaser.Scene
 
         if (this.bindings.accel.isDown)
         {
+            // this.playerEngine()
             const targetVelocity = this.physics.velocityFromRotation(this.ship.nextRotation, this.ship.speed)
             this.ship.body.velocity.lerp(targetVelocity, 0.01)
         }
-        else if (this.bindings.break.isDown)
+        else
         {
-            this.ship.body.velocity.divide({ x: 1.01, y: 1.01 })
-            const stopSpeed = 8
-            if (this.ship.body.velocity.x < stopSpeed && this.ship.body.velocity.x > -stopSpeed && this.ship.body.velocity.y < stopSpeed && this.ship.body.velocity.y > -stopSpeed)
+            if (this.bindings.break.isDown)
             {
-                this.ship.body.velocity.x = 0
-                this.ship.body.velocity.y = 0
+                this.ship.body.velocity.divide({ x: 1.01, y: 1.01 })
+                const stopSpeed = 8
+                if (this.ship.body.velocity.x < stopSpeed && this.ship.body.velocity.x > -stopSpeed && this.ship.body.velocity.y < stopSpeed && this.ship.body.velocity.y > -stopSpeed)
+                {
+                    this.ship.body.velocity.x = 0
+                    this.ship.body.velocity.y = 0
+                }
             }
         }
 
@@ -335,6 +351,8 @@ export default class Unstable extends Phaser.Scene
         console.log(`~${estimated} [${toMMSS(estimated)}] ${actual} [${toMMSS(actual)}]`)
         this.registry.set('timer', estimated)
 
+        const shieldDown = this.sound.add('shield_down')
+
         this.time.addEvent({
             // first instability in 2:30 to 5:00 minutes
             delay: actual,
@@ -346,6 +364,7 @@ export default class Unstable extends Phaser.Scene
                 this.station.data.set('rebooting', true)
                 this.registry.set('timer', VULNERABLE_TIME * 1000)
                 this.registry.set('vulnerable', true)
+                shieldDown.play()
 
                 this.time.addEvent({
                     delay: VULNERABLE_TIME * 1000,
