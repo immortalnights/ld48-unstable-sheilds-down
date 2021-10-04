@@ -1,6 +1,12 @@
 import Phaser from 'phaser'
 import { Resources } from './defines'
 
+
+const BASE_INTEGRITY = 1000
+const BASE_TRANSFER_RANGE = 30
+const BASE_TRANSFER_RATE = 80
+
+
 export class Station extends Phaser.GameObjects.Container
 {
     constructor(scene, x, y, radius = 10)
@@ -10,10 +16,14 @@ export class Station extends Phaser.GameObjects.Container
         this.data = new Phaser.Data.DataManager(this)
         this.data.set({
             rebooting: false,
-            integrity: 1000,
-            transferRange: 30,
-            transferRate: 80,
+            maxIntegrity: BASE_INTEGRITY,
+            integrity: BASE_INTEGRITY,
+            transferRange: BASE_TRANSFER_RANGE,
+            transferRate: BASE_TRANSFER_RATE,
+            processRate: Math.floor(BASE_TRANSFER_RATE  * 0.6)
         })
+
+        console.log(Resources)
 
         this.resources = new Phaser.Data.DataManager(this)
         Object.keys(Resources).forEach(item => {
@@ -41,12 +51,35 @@ export class Station extends Phaser.GameObjects.Container
         })
     }
 
+    preUpdate(time, delta)
+    {
+        let processAmount = this.data.get('processRate') * (delta / 1000)
+        Object.keys(this.resources.list).forEach(key => {
+            let amount = this.resources.get(key)
+            if (amount > 0)
+            {
+                const processed = Math.min(processAmount, amount)
+                amount -= processed
+                processAmount -= processed
+                this.resources.set(key, amount)
+
+                const credits = Resources[key].value * processed
+                this.scene.registry.inc('credits', credits)
+
+                console.log(`Processed ${processed} ${key} for ${credits} (remaining=${amount})`)
+            }
+        })
+    }
+
     takeDamage(amount)
     {
-        if (this.data.get('rebooting') === true)
+        let [ integrity, rebooting ] = this.data.get([ 'integrity', 'rebooting' ])
+
+        if (rebooting === true)
         {
-            this.data.inc('integrity', -amount)
-            console.log(`Station took damage (integrity=${this.data.get('integrity')})`)
+            integrity -= amount
+            this.data.set('integrity', Math.max(integrity, 0))
+            console.log(`Station took damage (integrity=${integrity})`)
         }
         else
         {
